@@ -22,6 +22,7 @@ from .const import (
     DOMAIN,
     CONF_USER_PASSWORD,
     CONF_NETWORK_PASSWORD,
+    CONF_NETWORK_UUID,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ AUTH_SCHEMA = vol.Schema(
         vol.Required(CONF_API_KEY): cv.string,
         vol.Required(CONF_USER_PASSWORD): cv.string,
         vol.Required(CONF_NETWORK_PASSWORD): cv.string,
+        vol.Required(CONF_NETWORK_UUID): cv.string,
     }
 )
 REPO_SCHEMA = vol.Schema(
@@ -42,7 +44,7 @@ REPO_SCHEMA = vol.Schema(
     }
 )
 
-OPTIONS_SHCEMA = vol.Schema({vol.Optional(CONF_NAME, default="foo"): cv.string})
+OPTIONS_SCHEMA = vol.Schema({vol.Optional(CONF_NAME, default="foo"): cv.string})
 
 
 async def validate_user_password(
@@ -63,25 +65,41 @@ async def validate_user_password(
 
 
 async def validate_network_password(
-    email: str, api_key: str, network_password: str, hass: core.HomeAssistant
+    email: str,
+    api_key: str,
+    network_password: str,
+    hass: core.HomeAssistant,
+    network_uuid: Optional[str] = None,
 ) -> None:
     """
-    Validates a GitHub access token.
+    Validate Casambi network password (and optionally the network UUID).
 
-    Raises a ValueError if the auth token is invalid.
+    Raises ValueError if invalid.
     """
     session = async_get_clientsession(hass)
     helper = Helper(email=email, api_key=api_key, websession=session)
 
     try:
+        # Validate the network password first
         await helper.test_network_password(password=network_password)
+
+        # Optionally verify that the provided network UUID exists for this account
+        if network_uuid:
+            try:
+                networks = await helper.get_networks()
+                uuids = {n.get("uuid") for n in networks or []}
+                if network_uuid not in uuids:
+                    raise ValueError
+            except AttributeError:
+                # Older aiocasambi may not provide get_networks; skip UUID check
+                _LOGGER.debug("Helper get_networks() not available; skipping UUID validation")
     except AiocasambiException:
         raise ValueError
 
 
 class CasambiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """
-    Github Custom config flow.
+    Casambi config flow using aiocasambi (OpenAPI / Evolution 46+).
     """
 
     data: Optional[Dict[str, Any]] = {}
@@ -157,12 +175,14 @@ class CasambiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self.data[CONF_API_KEY],
                     user_input[CONF_NETWORK_PASSWORD],
                     self.hass,
+                    user_input.get(CONF_NETWORK_UUID),
                 )
             except ValueError:
                 errors["base"] = "auth_network_password"
 
             if not errors:
                 self.data[CONF_NETWORK_PASSWORD] = user_input[CONF_NETWORK_PASSWORD]
+                self.data[CONF_NETWORK_UUID] = user_input[CONF_NETWORK_UUID]
                 # Return the form of the next step.
                 return self.async_create_entry(title="Casambi", data=self.data)
 
@@ -171,6 +191,7 @@ class CasambiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_NETWORK_PASSWORD): cv.string,
+                    vol.Required(CONF_NETWORK_UUID): cv.string,
                 }
             ),
             errors=errors,

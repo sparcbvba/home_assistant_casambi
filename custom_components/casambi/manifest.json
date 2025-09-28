@@ -1,19 +1,15 @@
 {
   "domain": "casambi",
-  "name": "casambi",
-  "codeowners": [
-    "@hellqvio86"
-  ],
-  "config_flow": true,
-  "dependencies": [],
-  "documentation": "https://github.com/hellqvio86/home_assistant_casambi",
-  "homekit": {},
+  "name": "Casambi (Forked)",
+  "version": "0.0.1",
+  "documentation": "https://github.com/sparcbvba/home_assistant_casambi",
+  "codeowners": ["@sparcbvba"],
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/hellqvio86/home_assistant_casambi/issues",
+  "issue_tracker": "https://github.com/sparcbvba/home_assistant_casambi/issues",
   "requirements": [
     "aiocasambi==0.285"
   ],
   "ssdp": [],
-  "version": "0.129",
-  "zeroconf": []
+  "zeroconf": [],
+  "config_flow": true
 }
